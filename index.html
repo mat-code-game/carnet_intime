@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mon Carnet Intime - Quadruple Sécurité</title>
+    <!-- Import de l'intelligence artificielle face-api.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        /* Design Mobile First, Sombre et Premium */
+        body { margin: 0; background: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        .app-container { width: 100%; max-width: 400px; height: 100%; background: #1e293b; display: flex; flex-direction: column; position: relative; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
+        
+        /* Écran de chargement IA */
+        #loader-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; position: absolute; width: 100%; background: #1e293b; z-index: 100; }
+        .spinner { border: 4px solid #334155; border-top: 4px solid #3b82f6; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; margin-bottom: 25px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Vues principales */
+        #step-camera, #step-pattern, #step-quiz, #step-pin, #step-diary { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; }
+
+        /* Quiz */
+        .quiz-card { background: #0f172a; border: 1px solid #334155; border-radius: 16px; padding: 24px; width: 100%; box-sizing: border-box; }
+        .quiz-question { color: #94a3b8; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .quiz-label { font-size: 1.1rem; font-weight: bold; margin-bottom: 16px; color: #f8fafc; }
+        .quiz-input { width: 100%; background: #1e293b; border: 2px solid #334155; color: #f8fafc; border-radius: 12px; padding: 14px; font-size: 1rem; outline: none; box-sizing: border-box; transition: border-color 0.2s; }
+        .quiz-input:focus { border-color: #3b82f6; }
+        .quiz-progress { display: flex; gap: 8px; margin-bottom: 30px; }
+        .quiz-dot { height: 6px; flex: 1; border-radius: 3px; background: #334155; transition: background 0.3s; }
+        .quiz-dot.done { background: #3b82f6; }
+        .quiz-dot.active { background: #60a5fa; }
+        
+        /* Caméra */
+        .camera-wrapper { position: relative; width: 220px; height: 220px; border-radius: 50%; overflow: hidden; border: 4px solid #3b82f6; box-shadow: 0 0 25px rgba(59, 130, 246, 0.4); margin-bottom: 20px; }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+
+        /* Boutons globaux */
+        .btn { background: #3b82f6; color: white; border: none; padding: 14px 20px; border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer; touch-action: manipulation; margin-top: 10px; transition: 0.2s; }
+        .btn:active { transform: scale(0.95); }
+        .btn-register { background: #8b5cf6; display: none; box-shadow: 0 5px 15px rgba(139, 92, 246, 0.4); width: 80%; }
+        .btn-lock { background: #ef4444; padding: 8px 15px; font-size: 0.9rem; border-radius: 8px;}
+        .info-text { color: #94a3b8; text-align: center; margin-top: 10px; font-size: 1rem; padding: 0 10px; }
+
+        /* Schéma de déverrouillage */
+        #pattern-canvas { touch-action: none; cursor: crosshair; border-radius: 16px; background: #0f172a; }
+        .pattern-status { font-size: 1.1rem; font-weight: bold; min-height: 28px; margin-top: 18px; text-align: center; transition: color 0.3s; }
+        .pattern-hint { color: #475569; font-size: 0.85rem; margin-top: 8px; text-align: center; }
+
+        /* PIN */
+        .pin-display { font-size: 2.5rem; letter-spacing: 15px; margin-bottom: 30px; min-height: 50px; color: #60a5fa; text-shadow: 0 0 10px rgba(96, 165, 250, 0.5); }
+        .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; width: 85%; }
+        .key { background: #334155; border: none; color: white; font-size: 1.6rem; padding: 18px 0; border-radius: 50%; cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center; touch-action: manipulation;}
+        .key:active { background: #475569; transform: scale(0.90); }
+        .key.action { background: #1e293b; color: #94a3b8; font-size: 1rem; font-weight: bold; }
+        
+        /* Carnet */
+        #step-diary { padding: 20px; box-sizing: border-box; justify-content: flex-start; }
+        header { display: flex; justify-content: space-between; align-items: center; width: 100%; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 15px; }
+        textarea { flex: 1; width: 100%; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 12px; padding: 15px; font-size: 1.1rem; resize: none; outline: none; margin-bottom: 15px; box-sizing: border-box; }
+        textarea:focus { border-color: #3b82f6; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    
+    <!-- Écran de chargement IA -->
+    <div id="loader-screen">
+        <div class="spinner"></div>
+        <h2 style="margin:0;">Initialisation de l'IA...</h2>
+        <p class="info-text">Chargement des sécurités...</p>
+    </div>
+
+    <!-- ÉTAPE 1 : Caméra IA -->
+    <div id="step-camera">
+        <h2 style="margin-bottom: 20px; margin-top:0;">1 / 4 — Reconnaissance IA</h2>
+        <div class="camera-wrapper">
+            <video id="videoElement" autoplay playsinline muted></video>
+            <canvas id="overlayCanvas"></canvas>
+        </div>
+        <p class="info-text" id="camera-status" style="height: 40px;">Analyse en cours...</p>
+        <button class="btn btn-register" id="btn-register" onclick="registerFace()">📸 Mémoriser mon visage</button>
+        <button class="btn btn-lock" id="btn-reset-face" onclick="resetFace()" style="display:none; margin-top:20px; font-size:0.8rem; background:#475569;">Oublier mon visage (Reset)</button>
+    </div>
+
+    <!-- ÉTAPE 2 : Schéma -->
+    <div id="step-pattern">
+        <h2 style="margin-bottom: 6px; margin-top:0;" id="pattern-title">2 / 4 — Schéma secret</h2>
+        <p class="info-text" style="margin-top:0; margin-bottom: 16px;" id="pattern-subtitle">Tracé votre schéma de déverrouillage.</p>
+        <canvas id="pattern-canvas" width="270" height="270"></canvas>
+        <p class="pattern-status" id="pattern-status"></p>
+        <p class="pattern-hint" id="pattern-hint">Relier au moins 4 points</p>
+        <button class="btn" id="pattern-reset-btn" onclick="resetPattern()" style="margin-top: 12px; background:#334155; font-size:0.9rem; display:none;">Recommencer</button>
+    </div>
+
+    <!-- ÉTAPE 3 : Quiz -->
+    <div id="step-quiz">
+        <h2 style="margin-bottom: 8px; margin-top:0;" id="quiz-title">3 / 5 — Quiz Secret</h2>
+        <p class="info-text" style="margin-top:0; margin-bottom: 20px;" id="quiz-subtitle">Répondez aux questions pour déverrouiller.</p>
+        <div class="quiz-progress" id="quiz-progress"></div>
+        <div class="quiz-card">
+            <p class="quiz-question" id="quiz-q-num">Question 1 / 3</p>
+            <p class="quiz-label" id="quiz-q-text"></p>
+            <input class="quiz-input" type="text" id="quiz-input" placeholder="Votre réponse..." autocomplete="off" />
+        </div>
+        <p class="info-text" id="quiz-status" style="margin-top: 16px; font-weight: bold; min-height: 24px;"></p>
+        <button class="btn" id="quiz-next-btn" onclick="quizNext()" style="width:100%; margin-top: 16px;">Suivant ➜</button>
+    </div>
+
+    <!-- ÉTAPE 4 : Code PIN -->
+    <div id="step-pin">
+        <h2 style="margin-bottom: 15px; margin-top:0;">4 / 5 — Code Secret</h2>
+        <p class="info-text" id="pin-status" style="margin-top:0; margin-bottom: 20px;">Dernière vérification</p>
+        <div class="pin-display" id="pin-display"></div>
+        <div class="keypad">
+            <button class="key" onclick="addPin('1')">1</button>
+            <button class="key" onclick="addPin('2')">2</button>
+            <button class="key" onclick="addPin('3')">3</button>
+            <button class="key" onclick="addPin('4')">4</button>
+            <button class="key" onclick="addPin('5')">5</button>
+            <button class="key" onclick="addPin('6')">6</button>
+            <button class="key" onclick="addPin('7')">7</button>
+            <button class="key" onclick="addPin('8')">8</button>
+            <button class="key" onclick="addPin('9')">9</button>
+            <button class="key action" onclick="clearPin()">EFFACER</button>
+            <button class="key" onclick="addPin('0')">0</button>
+            <button class="key action" onclick="checkPin()" style="color: #10b981;">VALIDER</button>
+        </div>
+    </div>
+
+    <!-- CARNET -->
+    <div id="step-diary">
+        <header>
+            <h2 style="margin:0;">Mon Carnet</h2>
+            <button class="btn btn-lock" onclick="lockSafe()">Verrouiller</button>
+        </header>
+        <textarea id="diary-text" placeholder="Écrivez vos secrets ici..."></textarea>
+        <button class="btn" onclick="saveDiary()" style="width:100%;">Sauvegarder le carnet</button>
+    </div>
+
+</div>
+
+<script>
+    // ============================================
+    // CONFIGURATION
+    const PHRASE_SECRETE = "sésame ouvre-toi"; // <--- CHANGER LA PHRASE ICI
+    const CODE_SECRET = "1534";                // <--- CHANGER LE CODE ICI
+
+    // Questions du quiz (tu peux en ajouter ou modifier !)
+    const QUIZ_QUESTIONS = [
+        "Quel est le prénom de ton meilleur(e) ami(e) ?",
+        "Quel est ton film ou série préféré(e) ?",
+        "Quel est le nom de ton animal préféré (ou celui que tu aimerais avoir) ?"
+    ];
+    // ============================================
+
+    let currentPin = "";
+    let stream = null;
+    let detectionInterval = null;
+    const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+
+    // Éléments du DOM
+    const loaderScreen = document.getElementById('loader-screen');
+    const stepCamera = document.getElementById('step-camera');
+    const stepVoice = document.getElementById('step-voice');
+    const stepPin = document.getElementById('step-pin');
+    const stepDiary = document.getElementById('step-diary');
+    
+    // IA Visage
+    const video = document.getElementById('videoElement');
+    const canvas = document.getElementById('overlayCanvas');
+    const cameraStatus = document.getElementById('camera-status');
+    const btnRegister = document.getElementById('btn-register');
+    const btnResetFace = document.getElementById('btn-reset-face');
+    
+    // Voix
+    const micBtn = document.getElementById('mic-btn');
+    const voiceStatus = document.getElementById('voice-status');
+
+    // PIN et Carnet
+    const pinDisplay = document.getElementById('pin-display');
+    const pinStatus = document.getElementById('pin-status');
+    const diaryText = document.getElementById('diary-text');
+
+    // --- 1. INITIALISATION VISAGE ---
+    async function initAI() {
+        const infoText = document.querySelector('#loader-screen .info-text');
+        try {
+            infoText.innerHTML = "Étape 1/4 : Modèle de détection...";
+            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            infoText.innerHTML = "Étape 2/4 : Modèle des traits...";
+            await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+            infoText.innerHTML = "Étape 3/4 : Modèle de reconnaissance...";
+            await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+            infoText.innerHTML = "Étape 4/4 : Démarrage caméra...";
+            startCamera();
+        } catch (e) {
+            console.error(e);
+            loaderScreen.innerHTML = "<h2 style='color:#ef4444'>Erreur de chargement</h2><p style='text-align:center'>Détail : " + e.message + "<br>Vérifiez votre connexion internet.</p>";
+        }
+    }
+
+    async function startCamera() {
+        const infoText = document.querySelector('#loader-screen .info-text');
+        try {
+            infoText.innerHTML = "Demande d'accès à la caméra...";
+
+            // Sur mobile en file://, mediaDevices peut être absent
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("camera_unavailable");
+            }
+
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+            video.srcObject = stream;
+            infoText.innerHTML = "Caméra autorisée, allumage en cours...";
+            video.play().catch(e => console.log("Autoplay bloqué"));
+            
+            video.onplaying = () => {
+                loaderScreen.style.display = 'none';
+                stepCamera.style.display = 'flex';
+                faceapi.matchDimensions(canvas, video);
+                const savedFace = localStorage.getItem('saved_face_descriptor');
+                if (!savedFace) {
+                    cameraStatus.textContent = "Aucun visage configuré. Placez-vous au centre et cliquez sur le bouton.";
+                    btnRegister.style.display = 'block';
+                    btnResetFace.style.display = 'none';
+                } else {
+                    cameraStatus.textContent = "Recherche de votre visage...";
+                    btnRegister.style.display = 'none';
+                    btnResetFace.style.display = 'block';
+                    startDetectionLoop();
+                }
+            };
+        } catch (err) {
+            // Détecter le type d'erreur pour afficher un message utile
+            let msg = "";
+            const errName = err.name || err.message || "";
+
+            if (errName === "camera_unavailable" || errName.includes("mediaDevices")) {
+                msg = "Votre navigateur bloque la caméra (fichier local).<br>Essayez d'ouvrir via un serveur ou un navigateur différent.";
+            } else if (errName === "NotAllowedError" || errName.includes("Permission")) {
+                msg = "Accès à la caméra <b>refusé</b>.<br>Autorisez la caméra dans les paramètres de votre navigateur.";
+            } else if (errName === "NotFoundError") {
+                msg = "Aucune caméra détectée sur cet appareil.";
+            } else {
+                msg = "Erreur caméra : <i>" + (err.message || errName) + "</i>";
+            }
+
+            loaderScreen.innerHTML = `
+                <div style="text-align:center; padding: 30px;">
+                    <div style="font-size:3rem; margin-bottom:16px;">📷</div>
+                    <h2 style="color:#ef4444; margin:0 0 12px;">Caméra indisponible</h2>
+                    <p style="color:#94a3b8; margin-bottom:24px;">${msg}</p>
+                    <button onclick="startCamera()" style="background:#3b82f6;color:white;border:none;padding:12px 20px;border-radius:12px;font-size:1rem;font-weight:bold;cursor:pointer;margin-bottom:12px;width:80%;">
+                        🔄 Réessayer
+                    </button>
+                    <br>
+                    <button onclick="skipCameraStep()" style="background:#334155;color:#94a3b8;border:none;padding:10px 20px;border-radius:12px;font-size:0.9rem;cursor:pointer;width:80%;">
+                        Passer cette étape (Secours)
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // Fonction pour passer l'étape caméra sans vérification
+    function skipCameraStep() {
+        loaderScreen.style.display = 'none';
+        showStepPattern();
+    }
+
+    async function registerFace() {
+        cameraStatus.textContent = "Extraction de l'empreinte mathématique...";
+        btnRegister.disabled = true;
+        btnRegister.textContent = "Analyse...";
+
+        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+        if (detection) {
+            const descriptorArray = Array.from(detection.descriptor);
+            localStorage.setItem('saved_face_descriptor', JSON.stringify(descriptorArray));
+            cameraStatus.textContent = "Visage enregistré avec succès !";
+            cameraStatus.style.color = "#10b981";
+            btnRegister.style.display = 'none';
+            
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            faceapi.draw.drawDetections(canvas, faceapi.resizeResults(detection, { width: video.videoWidth, height: video.videoHeight }));
+            
+            setTimeout(() => {
+                cameraStatus.style.color = "#94a3b8";
+                cameraStatus.textContent = "Test de reconnaissance en cours...";
+                btnResetFace.style.display = 'block';
+                startDetectionLoop();
+            }, 2000);
+        } else {
+            cameraStatus.textContent = "Visage non détecté. Rapprochez-vous !";
+            cameraStatus.style.color = "#ef4444";
+            btnRegister.disabled = false;
+            btnRegister.textContent = "📸 Mémoriser mon visage";
+        }
+    }
+
+    function resetFace() {
+        localStorage.removeItem('saved_face_descriptor');
+        stopDetectionLoop();
+        cameraStatus.textContent = "Mémoire effacée. Veuillez enregistrer un nouveau visage.";
+        cameraStatus.style.color = "#94a3b8";
+        btnRegister.style.display = 'block';
+        btnResetFace.style.display = 'none';
+        btnRegister.disabled = false;
+        btnRegister.textContent = "📸 Mémoriser mon visage";
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function startDetectionLoop() {
+        if (detectionInterval) clearInterval(detectionInterval);
+        
+        detectionInterval = setInterval(async () => {
+            if (video.paused || video.ended) return;
+            const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (detection) {
+                faceapi.draw.drawDetections(canvas, faceapi.resizeResults(detection, { width: video.videoWidth, height: video.videoHeight }));
+                const savedData = JSON.parse(localStorage.getItem('saved_face_descriptor'));
+                if(!savedData) return;
+                
+                const distance = faceapi.euclideanDistance(detection.descriptor, new Float32Array(savedData));
+                if (distance < 0.55) {
+                    cameraStatus.textContent = "Visage reconnu ! Déverrouillage...";
+                    cameraStatus.style.color = "#10b981";
+                    stopDetectionLoop();
+                    
+                    setTimeout(() => {
+                        stopCamera();
+                        showStepPattern(); // ---> PASSE AU SCHÉMA
+                    }, 1200);
+                } else {
+                    cameraStatus.textContent = "Visage inconnu ! Accès refusé.";
+                    cameraStatus.style.color = "#ef4444";
+                }
+            } else {
+                cameraStatus.textContent = "Recherche de visage...";
+                cameraStatus.style.color = "#94a3b8";
+            }
+        }, 300);
+    }
+
+    function stopDetectionLoop() { if (detectionInterval) { clearInterval(detectionInterval); detectionInterval = null; } }
+    function stopCamera() { if (stream) { stream.getTracks().forEach(track => track.stop()); } }
+
+    // --- 2. LOGIQUE DU SCHÉMA ---
+    const stepPattern = document.getElementById('step-pattern');
+    const patternCanvas = document.getElementById('pattern-canvas');
+    const patternStatus = document.getElementById('pattern-status');
+    const patternHint = document.getElementById('pattern-hint');
+    const patternResetBtn = document.getElementById('pattern-reset-btn');
+    const patternTitle = document.getElementById('pattern-title');
+    const patternSubtitle = document.getElementById('pattern-subtitle');
+    const ctx2 = patternCanvas.getContext('2d');
+
+    // Les 9 points de la grille (numérotés 0-8)
+    const DOTS = [];
+    const DOT_R = 12;
+    const GRID_PAD = 45;
+    const GRID_SIZE = 270;
+    const CELL = (GRID_SIZE - GRID_PAD * 2) / 2;
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+            DOTS.push({ x: GRID_PAD + c * CELL, y: GRID_PAD + r * CELL });
+        }
+    }
+
+    let patternMode = 'verify'; // 'setup' ou 'verify'
+    let patternDrawing = false;
+    let patternPath = []; // indices des points touchés dans l'ordre
+    let patternCurrentPos = null;
+    let patternLocked = false;
+
+    function showStepPattern() {
+        stepCamera.style.display = 'none';
+        stepPattern.style.display = 'flex';
+        const saved = localStorage.getItem('pattern_lock');
+        if (!saved) {
+            patternMode = 'setup';
+            patternTitle.textContent = '2 / 4 — Créer ton Schéma';
+            patternSubtitle.textContent = 'Première connexion : dessine ton schéma secret.';
+        } else {
+            patternMode = 'verify';
+            patternTitle.textContent = '2 / 4 — Schéma Secret';
+            patternSubtitle.textContent = 'Dessine ton schéma pour déverrouiller.';
+        }
+        resetPattern();
+    }
+
+    function resetPattern() {
+        patternPath = [];
+        patternDrawing = false;
+        patternCurrentPos = null;
+        patternLocked = false;
+        patternStatus.textContent = '';
+        patternStatus.style.color = '#94a3b8';
+        patternResetBtn.style.display = 'none';
+        drawPatternGrid();
+    }
+
+    function drawPatternGrid(highlightPath, currentPos, color) {
+        ctx2.clearRect(0, 0, GRID_SIZE, GRID_SIZE);
+        const lineColor = color || '#3b82f6';
+
+        // Lignes entre les points tracés
+        if (highlightPath && highlightPath.length > 1) {
+            ctx2.strokeStyle = lineColor;
+            ctx2.lineWidth = 4;
+            ctx2.lineCap = 'round';
+            ctx2.globalAlpha = 0.6;
+            ctx2.beginPath();
+            ctx2.moveTo(DOTS[highlightPath[0]].x, DOTS[highlightPath[0]].y);
+            for (let i = 1; i < highlightPath.length; i++) {
+                ctx2.lineTo(DOTS[highlightPath[i]].x, DOTS[highlightPath[i]].y);
+            }
+            if (currentPos) ctx2.lineTo(currentPos.x, currentPos.y);
+            ctx2.stroke();
+            ctx2.globalAlpha = 1.0;
+        }
+
+        // Points
+        DOTS.forEach((dot, idx) => {
+            const isActive = highlightPath && highlightPath.includes(idx);
+            ctx2.beginPath();
+            ctx2.arc(dot.x, dot.y, DOT_R, 0, Math.PI * 2);
+            ctx2.fillStyle = isActive ? lineColor : '#334155';
+            ctx2.fill();
+            if (isActive) {
+                ctx2.beginPath();
+                ctx2.arc(dot.x, dot.y, DOT_R + 6, 0, Math.PI * 2);
+                ctx2.strokeStyle = lineColor;
+                ctx2.lineWidth = 2;
+                ctx2.globalAlpha = 0.3;
+                ctx2.stroke();
+                ctx2.globalAlpha = 1.0;
+            }
+            // Numéro du point (petit)
+            ctx2.fillStyle = isActive ? '#fff' : '#64748b';
+            ctx2.font = 'bold 11px sans-serif';
+            ctx2.textAlign = 'center';
+            ctx2.textBaseline = 'middle';
+            ctx2.fillText(idx + 1, dot.x, dot.y);
+        });
+    }
+
+    function getEventPos(e) {
+        const rect = patternCanvas.getBoundingClientRect();
+        const scaleX = patternCanvas.width / rect.width;
+        const scaleY = patternCanvas.height / rect.height;
+        if (e.touches) {
+            return {
+                x: (e.touches[0].clientX - rect.left) * scaleX,
+                y: (e.touches[0].clientY - rect.top) * scaleY
+            };
+        }
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    }
+
+    function getNearestDot(pos) {
+        for (let i = 0; i < DOTS.length; i++) {
+            const dx = DOTS[i].x - pos.x;
+            const dy = DOTS[i].y - pos.y;
+            if (Math.sqrt(dx * dx + dy * dy) < DOT_R + 14) return i;
+        }
+        return -1;
+    }
+
+    function onPatternStart(e) {
+        if (patternLocked) return;
+        e.preventDefault();
+        patternDrawing = true;
+        patternPath = [];
+        patternCurrentPos = null;
+        const pos = getEventPos(e);
+        const dot = getNearestDot(pos);
+        if (dot !== -1) patternPath.push(dot);
+        drawPatternGrid(patternPath, null);
+    }
+
+    function onPatternMove(e) {
+        if (!patternDrawing || patternLocked) return;
+        e.preventDefault();
+        const pos = getEventPos(e);
+        patternCurrentPos = pos;
+        const dot = getNearestDot(pos);
+        if (dot !== -1 && !patternPath.includes(dot)) patternPath.push(dot);
+        drawPatternGrid(patternPath, patternCurrentPos);
+    }
+
+    function onPatternEnd(e) {
+        if (!patternDrawing || patternLocked) return;
+        e.preventDefault();
+        patternDrawing = false;
+        patternCurrentPos = null;
+
+        if (patternPath.length < 4) {
+            patternStatus.textContent = 'Trop court ! Relie au moins 4 points.';
+            patternStatus.style.color = '#f59e0b';
+            drawPatternGrid(patternPath, null, '#f59e0b');
+            setTimeout(() => resetPattern(), 1500);
+            return;
+        }
+
+        if (patternMode === 'setup') {
+            localStorage.setItem('pattern_lock', JSON.stringify(patternPath));
+            patternStatus.textContent = 'Schéma enregistré ! ✓';
+            patternStatus.style.color = '#10b981';
+            drawPatternGrid(patternPath, null, '#10b981');
+            patternLocked = true;
+            setTimeout(() => { showStepQuiz(); }, 1500);
+        } else {
+            const saved = JSON.parse(localStorage.getItem('pattern_lock'));
+            if (JSON.stringify(patternPath) === JSON.stringify(saved)) {
+                patternStatus.textContent = 'Schéma correct ! Déverrouillage...';
+                patternStatus.style.color = '#10b981';
+                drawPatternGrid(patternPath, null, '#10b981');
+                patternLocked = true;
+                setTimeout(() => { showStepQuiz(); }, 1200);
+            } else {
+                patternStatus.textContent = 'Schéma incorrect. Réessayez.';
+                patternStatus.style.color = '#ef4444';
+                drawPatternGrid(patternPath, null, '#ef4444');
+                patternResetBtn.style.display = 'block';
+                patternLocked = true;
+            }
+        }
+    }
+
+    // Événements souris
+    patternCanvas.addEventListener('mousedown', onPatternStart);
+    patternCanvas.addEventListener('mousemove', onPatternMove);
+    patternCanvas.addEventListener('mouseup', onPatternEnd);
+    // Événements tactiles
+    patternCanvas.addEventListener('touchstart', onPatternStart, { passive: false });
+    patternCanvas.addEventListener('touchmove', onPatternMove, { passive: false });
+    patternCanvas.addEventListener('touchend', onPatternEnd, { passive: false });
+
+    drawPatternGrid([]); // Dessiner la grille vide au chargement
+
+    // --- 3. LOGIQUE DU QUIZ ---
+    const stepQuiz = document.getElementById('step-quiz');
+    const quizInput = document.getElementById('quiz-input');
+    const quizQNum = document.getElementById('quiz-q-num');
+    const quizQText = document.getElementById('quiz-q-text');
+    const quizStatus = document.getElementById('quiz-status');
+    const quizTitle = document.getElementById('quiz-title');
+    const quizSubtitle = document.getElementById('quiz-subtitle');
+    const quizProgressEl = document.getElementById('quiz-progress');
+
+    let quizIndex = 0;
+    let quizMode = 'verify'; // 'setup' ou 'verify'
+    let quizAnswers = [];
+
+    function showStepQuiz() {
+        stepPattern.style.display = 'none';
+        stepQuiz.style.display = 'flex';
+        quizIndex = 0;
+        quizAnswers = [];
+
+        const savedAnswers = localStorage.getItem('quiz_answers');
+        if (!savedAnswers) {
+            // 1ÈRE FOIS : Mode configuration
+            quizMode = 'setup';
+            quizTitle.textContent = '3 / 5 — Créer ton Quiz';
+            quizSubtitle.textContent = 'Première connexion : crée tes réponses secrètes.';
+        } else {
+            // FOIS SUIVANTES : Mode vérification
+            quizMode = 'verify';
+            quizTitle.textContent = '3 / 5 — Quiz Secret';
+            quizSubtitle.textContent = 'Répondez aux questions pour déverrouiller.';
+        }
+        buildQuizProgress();
+        showQuizQuestion();
+    }
+
+    function buildQuizProgress() {
+        quizProgressEl.innerHTML = '';
+        QUIZ_QUESTIONS.forEach((_, i) => {
+            const dot = document.createElement('div');
+            dot.className = 'quiz-dot' + (i === 0 ? ' active' : '');
+            dot.id = 'qdot-' + i;
+            quizProgressEl.appendChild(dot);
+        });
+    }
+
+    function showQuizQuestion() {
+        quizStatus.textContent = '';
+        quizStatus.style.color = '#94a3b8';
+        quizInput.value = '';
+        quizInput.focus();
+        quizQNum.textContent = 'Question ' + (quizIndex + 1) + ' / ' + QUIZ_QUESTIONS.length;
+        quizQText.textContent = QUIZ_QUESTIONS[quizIndex];
+
+        const btn = document.getElementById('quiz-next-btn');
+        const isLast = quizIndex === QUIZ_QUESTIONS.length - 1;
+        if (quizMode === 'setup') {
+            btn.textContent = isLast ? 'Enregistrer ✓' : 'Suivant ➜';
+        } else {
+            btn.textContent = isLast ? 'Valider ✓' : 'Suivant ➜';
+        }
+
+        // Mise à jour des points de progression
+        for (let i = 0; i < QUIZ_QUESTIONS.length; i++) {
+            const dot = document.getElementById('qdot-' + i);
+            if (!dot) continue;
+            dot.className = 'quiz-dot' + (i < quizIndex ? ' done' : i === quizIndex ? ' active' : '');
+        }
+    }
+
+    function quizNext() {
+        const answer = quizInput.value.trim();
+        if (!answer) {
+            quizStatus.textContent = 'Veuillez écrire une réponse !';
+            quizStatus.style.color = '#f59e0b';
+            return;
+        }
+
+        if (quizMode === 'setup') {
+            // Mode création : on accumule les réponses
+            quizAnswers.push(answer.toLowerCase());
+            if (quizIndex < QUIZ_QUESTIONS.length - 1) {
+                quizIndex++;
+                showQuizQuestion();
+            } else {
+                // Sauvegarde toutes les réponses dans localStorage
+                localStorage.setItem('quiz_answers', JSON.stringify(quizAnswers));
+                quizStatus.textContent = 'Quiz créé avec succès ! Bienvenue !';
+                quizStatus.style.color = '#10b981';
+                setTimeout(() => { showStepPin(); }, 1500);
+            }
+        } else {
+            // Mode vérification : on compare avec la réponse enregistrée
+            const savedAnswers = JSON.parse(localStorage.getItem('quiz_answers'));
+            const expected = savedAnswers[quizIndex];
+            const given = answer.toLowerCase();
+
+            if (given === expected) {
+                if (quizIndex < QUIZ_QUESTIONS.length - 1) {
+                    // Bonne réponse, question suivante
+                    quizIndex++;
+                    quizStatus.textContent = 'Bonne réponse ! ✓';
+                    quizStatus.style.color = '#10b981';
+                    setTimeout(() => { showQuizQuestion(); }, 600);
+                } else {
+                    // Toutes les réponses sont bonnes !
+                    quizStatus.textContent = 'Quiz réussi ! Déverrouillage...';
+                    quizStatus.style.color = '#10b981';
+                    setTimeout(() => { showStepPin(); }, 1500);
+                }
+            } else {
+                quizStatus.textContent = 'Mauvaise réponse. Réessayez.';
+                quizStatus.style.color = '#ef4444';
+                quizInput.value = '';
+            }
+        }
+    }
+
+    // Valider avec la touche Entrée
+    document.getElementById('quiz-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') quizNext();
+    });
+    function addPin(num) {
+        if (currentPin.length < 4) {
+            currentPin += num;
+            pinDisplay.textContent = "●".repeat(currentPin.length);
+        }
+    }
+
+    function clearPin() {
+        currentPin = "";
+        pinDisplay.textContent = "";
+        pinStatus.textContent = "Dernière vérification";
+        pinStatus.style.color = "#94a3b8";
+    }
+
+    function checkPin() {
+        if (currentPin === CODE_SECRET) {
+            showStepDiary();
+        } else {
+            pinStatus.textContent = "Code incorrect !";
+            pinStatus.style.color = "#ef4444";
+            currentPin = "";
+            pinDisplay.textContent = "";
+        }
+    }
+
+
+    // --- 4. LOGIQUE DU CODE PIN ET CARNET ---
+    function showStepPin() {
+        stepQuiz.style.display = 'none';
+        stepPin.style.display = 'flex';
+    }
+
+    function showStepDiary() {
+        stepPin.style.display = 'none';
+        stepDiary.style.display = 'flex';
+        const savedText = localStorage.getItem("mon_carnet_secret_data");
+        if (savedText) { diaryText.value = savedText; }
+    }
+
+    function lockSafe() {
+        saveDiary(); 
+        stepDiary.style.display = 'none';
+        loaderScreen.style.display = 'flex'; 
+        loaderScreen.innerHTML = '<div class="spinner"></div><h2 style="margin:0;">Verrouillage...</h2>';
+        clearPin();
+        setTimeout(() => {
+            loaderScreen.innerHTML = '<div class="spinner"></div><h2 style="margin:0;">Initialisation de l\'IA...</h2><p class="info-text">Chargement des sécurités...</p>';
+            startCamera(); 
+        }, 800);
+    }
+
+    function saveDiary() {
+        localStorage.setItem("mon_carnet_secret_data", diaryText.value);
+        const btn = document.querySelector('#step-diary .btn:not(.btn-lock)');
+        const oldText = btn.textContent;
+        btn.textContent = "✓ Sauvegardé";
+        btn.style.background = "#10b981";
+        setTimeout(() => { btn.textContent = oldText; btn.style.background = "#3b82f6"; }, 2000);
+    }
+
+    // Démarrer l'application
+    window.onload = initAI;
+</script>
+</body>
+</html>
