@@ -110,7 +110,7 @@
 
     <!-- ÉTAPE 4 : Code PIN -->
     <div id="step-pin">
-        <h2 style="margin-bottom: 15px; margin-top:0;">4 / 5 — Code Secret</h2>
+        <h2 style="margin-bottom: 10px; margin-top:0;" id="pin-title">4 / 4 — Code Secret</h2>
         <p class="info-text" id="pin-status" style="margin-top:0; margin-bottom: 20px;">Dernière vérification</p>
         <div class="pin-display" id="pin-display"></div>
         <div class="keypad">
@@ -144,15 +144,14 @@
 <script>
     // ============================================
     // CONFIGURATION
-    const PHRASE_SECRETE = "sésame ouvre-toi"; // <--- CHANGER LA PHRASE ICI
-    const CODE_SECRET = "1534";                // <--- CHANGER LE CODE ICI
-
-    // Questions du quiz (tu peux en ajouter ou modifier !)
+    // Questions du quiz (tu peux modifier les questions, pas les réponses !)
     const QUIZ_QUESTIONS = [
         "Quel est le prénom de ton meilleur(e) ami(e) ?",
         "Quel est ton film ou série préféré(e) ?",
         "Quel est le nom de ton animal préféré (ou celui que tu aimerais avoir) ?"
     ];
+    // Sel unique pour le chiffrement du PIN (ne pas changer après avoir créé ton PIN !)
+    const PIN_SALT = "carnet_intime_sel_2024";
     // ============================================
 
     let currentPin = "";
@@ -670,28 +669,75 @@
     document.getElementById('quiz-input').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') quizNext();
     });
+    // Fonction de hachage SHA-256 du PIN
+    async function hashPin(pin) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(pin + PIN_SALT);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    let pinMode = 'verify'; // 'setup', 'confirm', ou 'verify'
+    let pinFirstEntry = ''; // stocke la 1ère saisie lors de la création
+
     function addPin(num) {
         if (currentPin.length < 4) {
             currentPin += num;
             pinDisplay.textContent = "●".repeat(currentPin.length);
+            // Validation automatique dès que 4 chiffres sont entrés
+            if (currentPin.length === 4) setTimeout(() => checkPin(), 300);
         }
     }
 
     function clearPin() {
         currentPin = "";
         pinDisplay.textContent = "";
-        pinStatus.textContent = "Dernière vérification";
-        pinStatus.style.color = "#94a3b8";
     }
 
-    function checkPin() {
-        if (currentPin === CODE_SECRET) {
-            showStepDiary();
+    async function checkPin() {
+        if (currentPin.length < 4) return;
+        const entered = currentPin;
+        currentPin = "";
+        pinDisplay.textContent = "";
+
+        if (pinMode === 'setup') {
+            // 1èRE SAISIE : mémoriser et demander confirmation
+            pinFirstEntry = entered;
+            pinMode = 'confirm';
+            document.getElementById('pin-title').textContent = "Confirme ton code";
+            pinStatus.textContent = "Saisis le même code une deuxième fois.";
+            pinStatus.style.color = "#94a3b8";
+
+        } else if (pinMode === 'confirm') {
+            if (entered === pinFirstEntry) {
+                // Les deux saisies correspondent → on sauvegarde le hash
+                const hashed = await hashPin(entered);
+                localStorage.setItem('secret_pin_hash', hashed);
+                pinStatus.textContent = "Code créé avec succès ! ✓";
+                pinStatus.style.color = "#10b981";
+                setTimeout(() => showStepDiary(), 1200);
+            } else {
+                // Les deux saisies ne correspondent pas → recommencer
+                pinFirstEntry = '';
+                pinMode = 'setup';
+                document.getElementById('pin-title').textContent = "Crée ton code secret";
+                pinStatus.textContent = "Codes différents ! Recommence.";
+                pinStatus.style.color = "#ef4444";
+            }
+
         } else {
-            pinStatus.textContent = "Code incorrect !";
-            pinStatus.style.color = "#ef4444";
-            currentPin = "";
-            pinDisplay.textContent = "";
+            // MODE VÉRIFICATION : comparer le hash
+            const hashed = await hashPin(entered);
+            const saved = localStorage.getItem('secret_pin_hash');
+            if (hashed === saved) {
+                pinStatus.textContent = "Code correct ! ✓";
+                pinStatus.style.color = "#10b981";
+                setTimeout(() => showStepDiary(), 800);
+            } else {
+                pinStatus.textContent = "Code incorrect !";
+                pinStatus.style.color = "#ef4444";
+            }
         }
     }
 
@@ -700,6 +746,24 @@
     function showStepPin() {
         stepQuiz.style.display = 'none';
         stepPin.style.display = 'flex';
+        currentPin = '';
+        pinDisplay.textContent = '';
+
+        const savedHash = localStorage.getItem('secret_pin_hash');
+        if (!savedHash) {
+            // 1ÈRE FOIS : mode création
+            pinMode = 'setup';
+            pinFirstEntry = '';
+            document.getElementById('pin-title').textContent = '4 / 4 — Crée ton Code Secret';
+            pinStatus.textContent = 'Première connexion : choisis ton code à 4 chiffres.';
+            pinStatus.style.color = '#94a3b8';
+        } else {
+            // FOIS SUIVANTES : mode vérification
+            pinMode = 'verify';
+            document.getElementById('pin-title').textContent = '4 / 4 — Code Secret';
+            pinStatus.textContent = 'Dernière vérification';
+            pinStatus.style.color = '#94a3b8';
+        }
     }
 
     function showStepDiary() {
